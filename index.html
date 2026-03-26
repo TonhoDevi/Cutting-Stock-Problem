@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora de Corte de Vigas</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container colors">
+
+  <header>
+    <div class="label-tag">// Otimização de Materiais v1.0</div>
+    <h1>Corte de <span>Vigas</span></h1>
+    <p class="subtitle">Minimização de desperdício — Cutting Stock Problem</p>
+  </header>
+
+  <!-- INPUT -->
+  <div class="panel">
+    <div class="section-title">Configuração</div>
+    <div class="field-row">
+      <span class="field-label">COMPRIMENTO DA VIGA-MÃE</span>
+      <input type="number" id="beamLength" value="12" min="0.01" step="0.01">
+      <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">metros</span>
+    </div>
+
+    <div style="margin-top:20px">
+      <div class="section-title">Peças Necessárias</div>
+      <div class="pieces-header">
+        <span>Comprimento (m)</span>
+        <span>Quantidade</span>
+        <span></span>
+      </div>
+      <div id="piecesList"></div>
+      <button class="btn-add" onclick="addPiece()">+ ADICIONAR PEÇA</button>
+    </div>
+
+    <div id="errorBox"></div>
+    <button class="btn-calc" onclick="calculate()">▶ CALCULAR PLANO DE CORTE</button>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+
+    <!-- Summary -->
+    <div class="result-summary" id="summaryBox"></div>
+
+    <!-- Steps -->
+    <div style="margin-bottom:8px" class="section-title">Passo a Passo da Matemática</div>
+
+    <!-- Step 1 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">01</div>
+        <div class="step-title">Verificação de Viabilidade</div>
+      </div>
+      <div class="step-body" id="step1"></div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">02</div>
+        <div class="step-title">Geração de Padrões de Corte</div>
+      </div>
+      <div class="step-body" id="step2"></div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">03</div>
+        <div class="step-title">Modelo de Otimização (PLI)</div>
+      </div>
+      <div class="step-body" id="step3"></div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">04</div>
+        <div class="step-title">Plano de Corte — Resultado Final</div>
+      </div>
+      <div class="step-body" id="step4"></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
