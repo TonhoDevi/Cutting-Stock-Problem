@@ -20,16 +20,17 @@
   <div class="panel">
     <div class="section-title">Configuração</div>
     <div class="field-row">
-      <span class="field-label">COMPRIMENTO DA VIGA-MÃE</span>
-      <input type="number" id="beamLength" value="12" min="0.01" step="0.01">
-      <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">metros</span>
+      <span class="field-label">COMPRIMENTO DA BARRA MATRIZ</span>
+      <input type="number" id="beamLength" value="12" readonly disabled style="width: 80px; background: transparent; border: none; color: var(--accent); font-weight: bold; cursor: not-allowed;">
+      <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">metros (fixo)</span>
     </div>
 
     <div style="margin-top:20px">
       <div class="section-title">Peças Necessárias</div>
       <div class="pieces-header">
-        <span>Comprimento (m)</span>
-        <span>Quantidade</span>
+        <span>Diâmetro</span>
+        <span>Comprimento (cm)</span>
+        <span>Qtde.</span>
         <span></span>
       </div>
       <div id="piecesList"></div>

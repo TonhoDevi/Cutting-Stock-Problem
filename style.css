@@ -127,7 +127,7 @@ input:focus { border-color: var(--accent); }
 /* Pieces table */
 .pieces-header {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 100px 1fr 100px auto;
   gap: 10px;
   margin-bottom: 8px;
 }
@@ -140,11 +140,22 @@ input:focus { border-color: var(--accent); }
 }
 .piece-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 100px 1fr 100px auto;
   gap: 10px;
   margin-bottom: 8px;
   align-items: center;
   animation: slideIn .2s ease;
+}
+.piece-row select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 16px;
+  padding: 8px;
+  width: 100%;
+  outline: none;
 }
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(-6px); }

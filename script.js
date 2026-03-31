@@ -10,14 +10,19 @@ function getColor(i) {
 }
 
 // ─── Piece management ─────────────────────────────────────────────────────────
-function addPiece(len = '', qty = '') {
+function addPiece(dia = '10', len = '', qty = '') {
   const list = document.getElementById('piecesList');
   const id = pieceCount++;
   const row = document.createElement('div');
   row.className = 'piece-row';
   row.id = `piece_${id}`;
   row.innerHTML = `
-    <input type="number" placeholder="ex: 2.5" min="0.01" step="0.01" value="${len}" class="piece-len">
+    <select class="piece-dia">
+       <option value="6.3" ${dia=='6.3'?'selected':''}>6.3 mm</option>
+       <option value="10" ${dia=='10'?'selected':''}>10.0 mm</option>
+       <option value="12.5" ${dia=='12.5'?'selected':''}>12.5 mm</option>
+    </select>
+    <input type="number" placeholder="ex: 250" min="1" step="0.1" value="${len}" class="piece-len">
     <input type="number" placeholder="ex: 3" min="1" step="1" value="${qty}" class="piece-qty">
     <button class="btn-remove" onclick="removePiece('piece_${id}')">×</button>
   `;
@@ -33,10 +38,11 @@ function getPieces() {
   const rows = document.querySelectorAll('.piece-row');
   const pieces = [];
   rows.forEach(row => {
+    const dia = row.querySelector('.piece-dia').value;
     const len = parseFloat(row.querySelector('.piece-len').value);
     const qty = parseInt(row.querySelector('.piece-qty').value);
     if (!isNaN(len) && !isNaN(qty) && len > 0 && qty > 0) {
-      pieces.push({ len, qty });
+      pieces.push({ dia, len, qty });
     }
   });
   return pieces;
@@ -148,31 +154,32 @@ function renderBeam(pattern, pieces, beamLen) {
   for (let i = 0; i < pieces.length; i++) {
     for (let q = 0; q < pattern[i]; q++) {
       const pct = (pieces[i].len / total * 100).toFixed(2);
-      const col = getColor(i);
-      html += `<div class="beam-segment" style="width:${pct}%;background:${col}20;border-right:1px solid ${col};color:${col}">${pieces[i].len}m</div>`;
+      const col = pieces[i].color || getColor(i);
+      html += `<div class="beam-segment" style="width:${pct}%;background:${col}20;border-right:1px solid ${col};color:${col}">${pieces[i].len}</div>`;
     }
   }
   const waste = patternWaste(pattern, pieces, beamLen);
   if (waste > 0) {
     const pct = (waste / total * 100).toFixed(2);
-    html += `<div class="beam-segment beam-waste" style="width:${pct}%">${waste > 0.5 ? waste + 'm' : ''}</div>`;
+    const wasteText = waste % 1 !== 0 ? waste.toFixed(1) : waste;
+    html += `<div class="beam-segment beam-waste" style="width:${pct}%">${waste > 10 ? wasteText : ''}</div>`;
   }
   html += '</div>';
   return html;
 }
 
 function calculate() {
-  const beamLen = parseFloat(document.getElementById('beamLength').value);
-  const pieces = getPieces();
+  // A barra matriz é sempre de 12 metros, ou seja, 1200 cm
+  const beamLen = parseFloat(document.getElementById('beamLength').value) * 100;
+  const allPieces = getPieces();
   const errBox = document.getElementById('errorBox');
   errBox.innerHTML = '';
 
   // Validation
   const errors = [];
-  if (isNaN(beamLen) || beamLen <= 0) errors.push('Informe um comprimento válido para a viga-mãe.');
-  if (pieces.length === 0) errors.push('Adicione ao menos uma peça.');
-  pieces.forEach(p => {
-    if (p.len > beamLen) errors.push(`Peça de ${p.len}m é maior que a viga-mãe (${beamLen}m). Impossível cortar.`);
+  if (allPieces.length === 0) errors.push('Adicione ao menos uma peça.');
+  allPieces.forEach(p => {
+    if (p.len > beamLen) errors.push(`Peça de ${p.len}cm é maior que a barra matriz de ${beamLen}cm. Impossível cortar.`);
   });
 
   if (errors.length) {
@@ -181,31 +188,131 @@ function calculate() {
     return;
   }
 
-  // Sort pieces descending for better packing
-  pieces.sort((a, b) => b.len - a.len);
+  // Obter lista única de diâmetros (do menor pro maior)
+  const diameters = [...new Set(allPieces.map(p => p.dia))].sort((a,b) => parseFloat(a) - parseFloat(b));
 
-  const patterns = generatePatterns(pieces, beamLen);
-  const solution = solve(pieces, beamLen, patterns);
+  let totalBeams = 0;
+  let totalMaterial = 0; // em cm
+  let totalUsed = 0; // em cm
+  let totalWaste = 0; // em cm
+  let theorMin = 0;
 
-  const totalBeams = solution.reduce((s, u) => s + u.count, 0);
-  const totalMaterial = totalBeams * beamLen;
-  const totalUsed = pieces.reduce((s, p) => s + p.len * p.qty, 0);
-  const totalWaste = +(totalMaterial - totalUsed).toFixed(4);
-  const wastePercent = ((totalWaste / totalMaterial) * 100).toFixed(1);
-  const theorMin = Math.ceil(totalUsed / beamLen);
+  let s1 = `<p>A verificação física garante que a peça solicitada não excede os <strong>${beamLen}cm</strong> da barra matriz.</p>`;
+  let s2 = `<p>Um <strong>padrão de corte</strong> agrupa peças de mesmo diâmetro que cabem numa única matriz:</p>
+            <div class="math-block">Σ (quantidade_i × comprimento_i) ≤ ${beamLen}cm</div>`;
+  let s3 = `<p>O problema é formulado como <strong>Otimização Combinatória</strong>, resolvido via heurística gulosa independentemente para cada bitola de aço (diâmetro).</p>`;
+  let s4 = ``;
+  
+  let globalPieceIdx = 0;
 
+  diameters.forEach(dia => {
+    // Filtrar e ordenar peças desse diâmetro
+    let pieces = allPieces.filter(p => p.dia === dia);
+    pieces.sort((a, b) => b.len - a.len);
+
+    // Atribuir cores globais consistentes
+    pieces.forEach(p => {
+      p.color = getColor(globalPieceIdx++);
+    });
+
+    // Resolver agrupamento
+    const patterns = generatePatterns(pieces, beamLen);
+    const solution = solve(pieces, beamLen, patterns);
+
+    const dBeams = solution.reduce((s, u) => s + u.count, 0);
+    const dMaterial = dBeams * beamLen;
+    const dUsed = pieces.reduce((s, p) => s + p.len * p.qty, 0);
+    const dWaste = +(dMaterial - dUsed).toFixed(4);
+    const dTheorMin = Math.ceil(dUsed / beamLen);
+
+    totalBeams += dBeams;
+    totalMaterial += dMaterial;
+    totalUsed += dUsed;
+    totalWaste += dWaste;
+    theorMin += dTheorMin;
+
+    // ----- S1: Verificação -----
+    s1 += `<h4 style="margin: 16px 0 8px; color: var(--accent2)">Diâmetro: Ø${dia}mm</h4>`;
+    s1 += `<table class="eq-table"><thead><tr><th>Peça</th><th>Compr.</th><th>Qtd.</th><th>Cabe?</th><th>Total (cm)</th></tr></thead><tbody>`;
+    pieces.forEach((p, i) => {
+      s1 += `<tr>
+        <td><span style="display:inline-block;width:10px;height:10px;background:${p.color};border-radius:2px;margin-right:6px"></span>Peça (Ø${dia})</td>
+        <td class="hl">${p.len}cm</td><td>${p.qty}×</td>
+        <td class="hl2">✓</td>
+        <td>${+(p.len * p.qty).toFixed(2)}cm</td>
+      </tr>`;
+    });
+    s1 += `</tbody></table>`;
+
+    // ----- S2: Padrões -----
+    s2 += `<h4 style="margin: 16px 0 8px; color: var(--accent2)">Padrões Gerados (Ø${dia}mm)</h4>`;
+    s2 += `<div class="patterns-grid">`;
+    const usedKeys = new Set(solution.map(u => u.pattern.join(',')));
+    const displayPats = [
+      ...patterns.filter(p => usedKeys.has(p.join(','))),
+      ...patterns.filter(p => !usedKeys.has(p.join(','))).slice(0, 6)
+    ].slice(0, 12); // Exibe até 12 padrões no máximo por diâmetro para não poluir
+    
+    displayPats.forEach((pat, idx) => {
+      const waste = patternWaste(pat, pieces, beamLen);
+      const used = usedKeys.has(pat.join(','));
+      const piecesDesc = pieces.map((p, i) => pat[i] > 0 ? `${pat[i]}× ${p.len}cm` : null).filter(Boolean).join(' + ');
+      s2 += `<div class="pattern-card ${used ? 'used' : ''}">
+        <div class="pattern-card-title">${used ? '★ USADO' : `PADRÃO ${idx + 1}`}</div>
+        <div class="pattern-pieces">${piecesDesc}</div>
+        ${renderBeam(pat, pieces, beamLen)}
+        <div class="pattern-waste">Sobra: <span class="waste-val ${waste === 0 ? 'waste-zero' : ''}">${waste % 1 !== 0 ? waste.toFixed(1) : waste}cm</span></div>
+      </div>`;
+    });
+    s2 += `</div>`;
+
+    // ----- S4: Plano Final -----
+    if (dBeams > 0) {
+      s4 += `<h4 style="color:var(--accent); margin-top:24px; margin-bottom:12px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+               CORTES PARA BARRAS Ø${dia}mm (Total Necessário: ${dBeams} barras)
+             </h4>`;
+      let beamNum = 1;
+      solution.forEach(u => {
+        for (let c = 0; c < u.count; c++) {
+          const waste = patternWaste(u.pattern, pieces, beamLen);
+          s4 += `<div class="cut-beam">`;
+          s4 += `<div class="cut-beam-title">BARRA MATRIZ ${beamNum++} <span>de ${beamLen}cm (Ø${dia}mm)</span></div>`;
+          s4 += renderBeam(u.pattern, pieces, beamLen);
+          s4 += `<div class="cut-list">`;
+          pieces.forEach((p, i) => {
+            if (u.pattern[i] > 0) {
+              for (let q = 0; q < u.pattern[i]; q++) {
+                s4 += `<div class="cut-item">
+                  <div class="cut-swatch" style="background:${p.color}"></div>
+                  Cortar 1 peça de <span style="color:${p.color};font-weight:bold;">${p.len}cm</span>
+                </div>`;
+              }
+            }
+          });
+          if (waste > 0) {
+            s4 += `<div class="cut-item waste-line" style="margin-top:4px">▸ Sobra de matriz: ${waste % 1 !== 0 ? waste.toFixed(2) : waste}cm</div>`;
+          }
+          s4 += `</div></div>`;
+        }
+      });
+    }
+  }); // Fim do foreach diameter
+
+  // ----- Resumo e UI Final -----
   document.getElementById('results').style.display = 'block';
 
-  // ── Summary
+  const totalWasteObj = totalMaterial > 0 ? ((totalWaste / totalMaterial) * 100) : 0;
+  const wastePercent = totalWasteObj.toFixed(1);
+
   document.getElementById('summaryBox').innerHTML = `
     <div class="summary-stat">
       <div class="summary-num">${totalBeams}</div>
-      <div class="summary-label">Vigas Necessárias</div>
+      <div class="summary-label">Total Barras</div>
     </div>
     <div class="summary-divider"></div>
     <div class="summary-stat">
-      <div class="summary-num" style="color:var(--accent2)">${totalWaste}m</div>
-      <div class="summary-label">Desperdício Total</div>
+      <div class="summary-num" style="color:var(--accent2)">${(totalWaste / 100).toFixed(2)}m</div>
+      <div class="summary-label">Desperdício (m)</div>
     </div>
     <div class="summary-divider"></div>
     <div class="summary-stat">
@@ -219,100 +326,18 @@ function calculate() {
     </div>
   `;
 
-  // ── Step 1: Viability
-  let s1 = `<p>Antes de calcular qualquer coisa, verificamos se cada peça solicitada <strong>cabe fisicamente</strong> dentro da viga-mãe.</p>`;
-  s1 += `<div class="math-block">Para cada peça i:\n  comprimento_i ≤ comprimento_viga\n\nViga-mãe: ${beamLen}m</div>`;
-  s1 += `<table class="eq-table"><thead><tr><th>Peça</th><th>Comprimento</th><th>Qtd. Necessária</th><th>Cabe?</th><th>Material Total</th></tr></thead><tbody>`;
-  pieces.forEach((p, i) => {
-    const col = getColor(i);
-    s1 += `<tr>
-      <td><span style="display:inline-block;width:10px;height:10px;background:${col};border-radius:2px;margin-right:6px"></span>Peça ${i + 1}</td>
-      <td class="hl">${p.len}m</td><td>${p.qty}×</td>
-      <td class="hl2">✓ ${p.len}m ≤ ${beamLen}m</td>
-      <td>${(p.len * p.qty).toFixed(2)}m</td>
-    </tr>`;
-  });
-  const sumMat = pieces.reduce((s, p) => s + p.len * p.qty, 0);
-  s1 += `</tbody></table>`;
-  s1 += `<div class="math-block">Total de material necessário: ${sumMat.toFixed(2)}m\nMínimo teórico de vigas: ⌈${sumMat.toFixed(2)} ÷ ${beamLen}⌉ = ${theorMin} vigas\n\n(Atenção: o mínimo teórico ignora perdas de corte;\nna prática pode ser necessário mais.)</div>`;
   document.getElementById('step1').innerHTML = s1;
-
-  // ── Step 2: Patterns
-  let s2 = `<p>Um <strong>padrão de corte</strong> é qualquer combinação de peças que caiba dentro de uma única viga-mãe, respeitando a restrição:</p>`;
-  s2 += `<div class="math-block">Σ (quantidade_i × comprimento_i) ≤ ${beamLen}m</div>`;
-  s2 += `<p>Para o seu caso, foram gerados <strong>${patterns.length} padrões válidos</strong>. Abaixo os padrões utilizados na solução (destacados):</p>`;
-  s2 += `<div class="patterns-grid">`;
-  const usedKeys = new Set(solution.map(u => u.pattern.join(',')));
-  const displayPats = [
-    ...patterns.filter(p => usedKeys.has(p.join(','))),
-    ...patterns.filter(p => !usedKeys.has(p.join(','))).slice(0, 6)
-  ].slice(0, 12);
-  displayPats.forEach((pat, idx) => {
-    const waste = patternWaste(pat, pieces, beamLen);
-    const used = usedKeys.has(pat.join(','));
-    const piecesDesc = pieces.map((p, i) => pat[i] > 0 ? `${pat[i]}× ${p.len}m` : null).filter(Boolean).join(' + ');
-    s2 += `<div class="pattern-card ${used ? 'used' : ''}">
-      <div class="pattern-card-title">${used ? '★ USADO' : `PADRÃO ${idx + 1}`}</div>
-      <div class="pattern-pieces">${piecesDesc}</div>
-      ${renderBeam(pat, pieces, beamLen)}
-      <div class="pattern-waste">Sobra: <span class="waste-val ${waste === 0 ? 'waste-zero' : ''}">${waste}m</span></div>
-    </div>`;
-  });
-  if (patterns.length > 12) {
-    s2 += `<div class="pattern-card" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:var(--mono);font-size:12px">
-      + ${patterns.length - 12} outros padrões
-    </div>`;
-  }
-  s2 += `</div>`;
   document.getElementById('step2').innerHTML = s2;
-
-  // ── Step 3: PLI model
-  let s3 = `<p>O problema é formulado como <strong>Programação Linear Inteira (PLI)</strong>. Definimos variáveis de decisão x_p que representam quantas vezes cada padrão de corte P é usado:</p>`;
-  s3 += `<div class="math-block">MINIMIZAR:   Σ x_p   (total de vigas cortadas)\n\nSUJEITO A:\n  Para cada tipo de peça i:\n  Σ a_ip × x_p ≥ d_i    (satisfazer a demanda)\n\n  x_p ≥ 0, inteiro\n\nOnde:\n  a_ip = quantidade da peça i no padrão p\n  d_i  = demanda da peça i</div>`;
-  s3 += `<p>Para o seu problema, as restrições de demanda são:</p>`;
-  s3 += `<div class="math-block">`;
-  pieces.forEach((p, i) => {
-    s3 += `Peça ${i + 1} (${p.len}m): Σ a_${i + 1}p × x_p ≥ ${p.qty}\n`;
-  });
-  s3 += `</div>`;
-  s3 += `<p>O algoritmo usado é um <strong>Greedy guloso por cobertura</strong> — em cada iteração escolhemos o padrão que maximiza o comprimento aproveitado considerando a demanda restante, e aplicamos tantas vezes quanto necessário até zerar todas as demandas.</p>`;
-  s3 += `<div class="math-block">Pontuação de um padrão P na iteração k:\n\n  score(P) = Σ min(a_ip, demanda_i_restante) × comprimento_i\n           + (comprimento_total_padrão / ${beamLen}) × 0.5</div>`;
   document.getElementById('step3').innerHTML = s3;
-
-  // ── Step 4: Final plan
-  let s4 = `<p>A solução ótima encontrada usa <strong>${totalBeams} viga(s)</strong>. Siga o plano abaixo para executar os cortes:</p>`;
-  let beamNum = 1;
-  solution.forEach(u => {
-    for (let c = 0; c < u.count; c++) {
-      const waste = patternWaste(u.pattern, pieces, beamLen);
-      s4 += `<div class="cut-beam">`;
-      s4 += `<div class="cut-beam-title">VIGA ${beamNum++} <span>de ${beamLen}m</span></div>`;
-      s4 += renderBeam(u.pattern, pieces, beamLen);
-      s4 += `<div class="cut-list">`;
-      pieces.forEach((p, i) => {
-        if (u.pattern[i] > 0) {
-          const col = getColor(i);
-          for (let q = 0; q < u.pattern[i]; q++) {
-            s4 += `<div class="cut-item">
-              <div class="cut-swatch" style="background:${col}"></div>
-              Cortar 1 peça de <span style="color:${col}">${p.len}m</span>
-            </div>`;
-          }
-        }
-      });
-      if (waste > 0) {
-        s4 += `<div class="cut-item waste-line">▸ Sobra: ${waste}m (desperdício)</div>`;
-      }
-      s4 += `</div></div>`;
-    }
-  });
-  s4 += `<div class="math-block">RESUMO FINAL\n────────────────────────────────\nVigas-mãe usadas : ${totalBeams} × ${beamLen}m = ${totalMaterial}m\nMaterial útil    : ${totalUsed.toFixed(2)}m\nDesperdício      : ${totalWaste}m (${wastePercent}%)\nMínimo teórico   : ${theorMin} vigas</div>`;
+  
+  s4 += `<div class="math-block" style="margin-top: 30px;">RESUMO GERAL DOS MATERIAIS\n────────────────────────────────\nTotal Barras Usadas : ${totalBeams} (de 12m)\nMaterial Útil (Liq.): ${(totalUsed/100).toFixed(2)}m\nSobra (Desperdício) : ${(totalWaste/100).toFixed(2)}m (${wastePercent}%)\nMínimo Teórico Ideal: ${theorMin} barras</div>`;
   document.getElementById('step4').innerHTML = s4;
 
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-addPiece(2, 2);
-addPiece(6, 4);
-addPiece(7, 1);
+addPiece('10', 250, 4);
+addPiece('6.3', 600, 2);
+addPiece('10', 300, 3);
+addPiece('12.5', 400, 1);
