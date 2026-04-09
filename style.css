@@ -255,7 +255,50 @@ input:focus { border-color: var(--accent); }
 }
 .step-body {
   padding: 20px;
+  /* Acordeão: altura animada */
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s ease;
+  max-height: 999999px;
+  opacity: 1;
 }
+
+/* Estado colapsado */
+.step.collapsed .step-body {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+}
+
+/* Header clicável */
+.step-header-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.step-header-toggle:hover {
+  background: #222d3a;
+}
+
+/* Chevron */
+.step-chevron {
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.3s ease, color 0.2s;
+}
+.step-header-toggle:hover .step-chevron {
+  color: var(--accent);
+}
+/* Chevron aponta pra cima quando expandido */
+.step:not(.collapsed) .step-chevron {
+  transform: rotate(180deg);
+  color: var(--accent2);
+}
+
 .step-body p {
   font-size: 14px;
   line-height: 1.7;
@@ -485,3 +528,515 @@ input:focus { border-color: var(--accent); }
   .result-summary { flex-direction: column; }
   .summary-divider { width: 100%; height: 1px; }
 }
+
+/* ─── PDF Import ─────────────────────────────────────────────────────────── */
+.pdf-import-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.btn-pdf-import {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid var(--accent2);
+  border-radius: 3px;
+  color: var(--accent2);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  padding: 8px 16px;
+  text-transform: uppercase;
+  transition: all .2s;
+  user-select: none;
+}
+.btn-pdf-import:hover {
+  background: rgba(0,200,160,.12);
+  box-shadow: 0 0 12px rgba(0,200,160,.2);
+}
+
+.pdf-filename {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Modal overlay ──────────────────────────────────────────────────────── */
+.pdf-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.75);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn .2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.pdf-modal {
+  background: var(--surface);
+  border: 1px solid var(--accent2);
+  border-radius: 6px;
+  width: 100%;
+  max-width: 860px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 60px rgba(0,200,160,.15);
+  animation: modalSlide .25s ease;
+}
+
+@keyframes modalSlide {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.pdf-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pdf-modal-title {
+  font-family: var(--cond);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.pdf-modal-close {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 10px;
+  transition: all .2s;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+.pdf-modal-close:hover { border-color: var(--danger); color: var(--danger); }
+
+.pdf-modal-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ─── Status bar ─────────────────────────────────────────────────────────── */
+.pdf-parse-status {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pdf-parse-status:empty { display: none; }
+
+.pdf-status-loading {
+  background: rgba(240,165,0,.08);
+  border: 1px solid rgba(240,165,0,.25);
+  color: var(--accent);
+}
+.pdf-status-success {
+  background: rgba(0,200,160,.08);
+  border: 1px solid rgba(0,200,160,.25);
+  color: var(--accent2);
+}
+.pdf-status-error {
+  background: rgba(255,77,77,.08);
+  border: 1px solid rgba(255,77,77,.3);
+  color: var(--danger);
+}
+
+/* Loading spinner */
+.pdf-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Viga filter chips ──────────────────────────────────────────────────── */
+.pdf-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.viga-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.viga-chip {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  transition: all .15s;
+}
+.viga-chip.active {
+  background: rgba(0,200,160,.12);
+  border-color: var(--accent2);
+  color: var(--accent2);
+}
+.viga-chip:hover { border-color: var(--accent2); }
+
+.btn-select-all {
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn-select-all:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ─── Preview table ──────────────────────────────────────────────────────── */
+.pdf-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.pdf-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+  min-width: 620px;
+}
+
+.pdf-preview-table thead tr {
+  background: var(--surface2);
+}
+
+.pdf-preview-table th {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.pdf-preview-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #1a2030;
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.pdf-row:hover td { background: rgba(255,255,255,.02); }
+.pdf-row-selected td { background: rgba(0,200,160,.04); }
+
+.pdf-row-first-in-group td {
+  border-top: 1px solid var(--border);
+}
+
+.viga-badge {
+  background: rgba(240,165,0,.12);
+  border: 1px solid rgba(240,165,0,.3);
+  border-radius: 3px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+/* ─── Modal footer ───────────────────────────────────────────────────────── */
+.pdf-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pdf-import-count {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.btn-pdf-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  padding: 10px 20px;
+  transition: all .2s;
+  text-transform: uppercase;
+}
+.btn-pdf-cancel:hover { border-color: var(--danger); color: var(--danger); }
+
+.btn-pdf-confirm {
+  background: var(--accent2);
+  border: none;
+  border-radius: 3px;
+  color: #000;
+  cursor: pointer;
+  font-family: var(--cond);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 10px 28px;
+  text-transform: uppercase;
+  transition: all .2s;
+}
+.btn-pdf-confirm:hover { background: #00e4b5; box-shadow: 0 0 20px rgba(0,200,160,.3); }
+.btn-pdf-confirm:active { transform: scale(.98); }
+
+/* Responsive modal */
+@media (max-width: 600px) {
+  .pdf-modal { max-height: 100vh; border-radius: 0; }
+  .pdf-modal-footer { flex-wrap: wrap; }
+  .btn-pdf-confirm, .btn-pdf-cancel { flex: 1; text-align: center; }
+}
+
+/* ─── Print Button ───────────────────────────────────────────────────────── */
+.btn-print {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  border: none;
+  border-radius: 3px;
+  color: #000;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  padding: 8px 16px;
+  text-transform: uppercase;
+  transition: all .2s;
+}
+.btn-print:hover {
+  background: #ffc030;
+  transform: translateY(-1px);
+}
+.btn-print:active {
+  transform: translateY(0);
+}
+
+/* ─── Print Styles ───────────────────────────────────────────────────────── */
+@media print {
+  @page {
+    margin: 1.5cm;
+    size: A4 portrait;
+  }
+  
+  body, html {
+    background: #fff !important;
+    color: #000 !important;
+    min-height: auto;
+  }
+  
+  /* Disable gradient background grid */
+  body::before { 
+    display: none; 
+  }
+  
+  /* Hide UI elements not meant for print */
+  header, 
+  .panel, 
+  #stepBox1, 
+  #stepBox2, 
+  #stepBox3, 
+  .btn-print,
+  .section-title {
+    display: none !important;
+  }
+  
+  .container {
+    padding: 0 !important;
+    max-width: 100%;
+    margin: 0;
+  }
+  
+  /* Fix layout and backgrounds for print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+  }
+  
+  /* Retain result summary styling for print */
+  .result-summary {
+    background: #f8f9fa !important;
+    border: 2px solid #ccc !important;
+    color: #000 !important;
+    margin-top: 0;
+    margin-bottom: 30px;
+    padding: 20px !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .summary-num {
+    color: #000 !important;
+  }
+  .summary-label {
+    color: #555 !important;
+  }
+  .summary-divider {
+    background: #ccc !important;
+  }
+  
+  /* Formatação base da área do step 4 */
+  .step {
+    border: none !important;
+    background: transparent !important;
+  }
+  .step-header {
+    background: transparent !important;
+    border-bottom: 2px solid #000 !important;
+    padding: 0 0 10px 0 !important;
+    margin-bottom: 20px;
+  }
+  .step-title {
+    color: #000 !important;
+    font-size: 20px !important;
+  }
+  .step-num {
+    background: #000 !important;
+    color: #fff !important;
+  }
+  .step-body {
+    padding: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Bloco de corte individual */
+  .cut-beam {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 20px !important;
+    padding: 15px !important;
+  }
+  .cut-beam-title {
+    color: #000 !important;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+  .cut-beam-title span {
+    color: #666 !important;
+  }
+  
+  .cut-item {
+    color: #333 !important;
+  }
+  .cut-item span {
+    color: #000 !important;
+  }
+  
+  /* Retirar cores dos recortes para impressão */
+  .cut-swatch {
+    background: #ccc !important;
+    border: 1px solid #333 !important;
+  }
+
+  .beam-visual {
+    border: 3px solid #000 !important;
+    background: #fff !important;
+  }
+  .beam-segment {
+    background: #fff !important;
+    color: #000 !important;
+    border-right: 3px solid #000 !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+  }
+  .beam-segment:last-child {
+    border-right: none !important;
+  }
+  .beam-waste {
+    /* Listras cinza para a sobra em vez de cor vibrante */
+    background: repeating-linear-gradient(
+      45deg,
+      #f0f0f0,
+      #f0f0f0 4px,
+      #e0e0e0 4px,
+      #e0e0e0 8px
+    ) !important;
+    color: #555 !important;
+  }
+  
+  .math-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    background: #f8f9fa !important;
+    border-left-color: #000 !important;
+    color: #000 !important;
+    border: 1px solid #ddd !important;
+    border-left: 4px solid #000 !important;
+  }
+  
+  .page-break {
+    break-after: page;
+    page-break-after: always;
+  }
+}

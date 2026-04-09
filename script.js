@@ -9,6 +9,23 @@ function getColor(i) {
   return getComputedStyle(el).getPropertyValue(v).trim();
 }
 
+// ─── Collapsible steps ────────────────────────────────────────────────────────
+function toggleStep(id) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  box.classList.toggle('collapsed');
+}
+
+function collapseStep(id) {
+  const box = document.getElementById(id);
+  if (box) box.classList.add('collapsed');
+}
+
+function expandStep(id) {
+  const box = document.getElementById(id);
+  if (box) box.classList.remove('collapsed');
+}
+
 // ─── Piece management ─────────────────────────────────────────────────────────
 function addPiece(dia = '10', len = '', qty = '') {
   const list = document.getElementById('piecesList');
@@ -204,8 +221,14 @@ function calculate() {
   let s4 = ``;
   
   let globalPieceIdx = 0;
+  let printCutCounter = 0;
+  const MAX_CUTS_PER_PAGE = 5; // Limite de blocos de corte por página impressa
+  
+  let summaryByType = [];
+  let totalCutsCount = 0;
 
-  diameters.forEach(dia => {
+  diameters.forEach((dia, diaIndex) => {
+    let printCutCounter = 0; // reset po diâmetro
     // Filtrar e ordenar peças desse diâmetro
     let pieces = allPieces.filter(p => p.dia === dia);
     pieces.sort((a, b) => b.len - a.len);
@@ -230,6 +253,15 @@ function calculate() {
     totalUsed += dUsed;
     totalWaste += dWaste;
     theorMin += dTheorMin;
+    summaryByType.push({ dia, count: dBeams });
+
+    // Contabilizar cortes físicos desse diâmetro
+    let dCuts = 0;
+    solution.forEach(u => {
+      let parts = u.pattern.reduce((sum, qty) => sum + qty, 0);
+      dCuts += parts * u.count;
+    });
+    totalCutsCount += dCuts;
 
     // ----- S1: Verificação -----
     s1 += `<h4 style="margin: 16px 0 8px; color: var(--accent2)">Diâmetro: Ø${dia}mm</h4>`;
@@ -268,15 +300,21 @@ function calculate() {
 
     // ----- S4: Plano Final -----
     if (dBeams > 0) {
+      s4 += `<div class="page-break"></div>`;
       s4 += `<h4 style="color:var(--accent); margin-top:24px; margin-bottom:12px; border-bottom: 1px solid var(--border); padding-bottom: 6px;">
                CORTES PARA BARRAS Ø${dia}mm (Total Necessário: ${dBeams} barras)
              </h4>`;
       let beamNum = 1;
       solution.forEach(u => {
         for (let c = 0; c < u.count; c++) {
+          if (printCutCounter > 0 && printCutCounter % MAX_CUTS_PER_PAGE === 0) {
+            s4 += `<div class="page-break"></div>`;
+          }
+          printCutCounter++;
+          
           const waste = patternWaste(u.pattern, pieces, beamLen);
           s4 += `<div class="cut-beam">`;
-          s4 += `<div class="cut-beam-title">BARRA MATRIZ ${beamNum++} <span>de ${beamLen}cm (Ø${dia}mm)</span></div>`;
+          s4 += `<div class="cut-beam-title">BARRA ${beamNum++} <span>de ${beamLen}cm (Ø${dia}mm)</span></div>`;
           s4 += renderBeam(u.pattern, pieces, beamLen);
           s4 += `<div class="cut-list">`;
           pieces.forEach((p, i) => {
@@ -290,7 +328,7 @@ function calculate() {
             }
           });
           if (waste > 0) {
-            s4 += `<div class="cut-item waste-line" style="margin-top:4px">▸ Sobra de matriz: ${waste % 1 !== 0 ? waste.toFixed(2) : waste}cm</div>`;
+            s4 += `<div class="cut-item waste-line" style="margin-top:4px">▸ Sobra da barra: ${waste % 1 !== 0 ? waste.toFixed(2) : waste}cm</div>`;
           }
           s4 += `</div></div>`;
         }
@@ -330,10 +368,30 @@ function calculate() {
   document.getElementById('step2').innerHTML = s2;
   document.getElementById('step3').innerHTML = s3;
   
-  s4 += `<div class="math-block" style="margin-top: 30px;">RESUMO GERAL DOS MATERIAIS\n────────────────────────────────\nTotal Barras Usadas : ${totalBeams} (de 12m)\nMaterial Útil (Liq.): ${(totalUsed/100).toFixed(2)}m\nSobra (Desperdício) : ${(totalWaste/100).toFixed(2)}m (${wastePercent}%)\nMínimo Teórico Ideal: ${theorMin} barras</div>`;
-  document.getElementById('step4').innerHTML = s4;
+  let printCover = `
+    <div class="print-cover" style="margin-bottom: 30px;">
+      <h3 style="color:var(--accent); border-bottom: 2px solid var(--border); padding-bottom: 15px; font-size: 22px;">RESUMO E SEPARAÇÃO DE MATERIAIS</h3>
+      <div style="font-family: var(--mono); font-size: 18px; line-height: 2; margin-top: 20px; color: #000;">
+        <p style="font-size: 24px; font-weight: bold;"><strong>Total de Vigas Necessárias:</strong> ${totalBeams} vigas de ${beamLen/100}m</p>
+        <p style="font-size: 20px;"><strong>Total de Cortes Físicos a Realizar:</strong> ${totalCutsCount} cortes</p>
+        <div style="margin-top:20px; padding: 15px; background: rgba(0,0,0,0.1) !important; border-left: 4px solid #000;">
+          <strong style="font-size: 20px;">Detalhamento por Diâmetro:</strong>
+          <ul style="margin-top:10px; margin-left: 20px; list-style-type: square; font-size: 20px;">
+            ${summaryByType.map(s => `<li>Ø ${s.dia}mm : <b style="color:#000;">${s.count} vigas</b></li>`).join('')}
+          </ul>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('step4').innerHTML = printCover + s4;
 
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Passos de detalhamento: colapsados por padrão
+  collapseStep('stepBox1');
+  collapseStep('stepBox2');
+  collapseStep('stepBox3');
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
