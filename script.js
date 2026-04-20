@@ -1,7 +1,7 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 let pieceCount = 0;
 
-const COLORS = ['--c0','--c1','--c2','--c3','--c4','--c5','--c6','--c7'];
+const COLORS = ['--c0', '--c1', '--c2', '--c3', '--c4', '--c5', '--c6', '--c7'];
 
 function getColor(i) {
   const v = COLORS[i % COLORS.length];
@@ -35,9 +35,9 @@ function addPiece(dia = '10', len = '', qty = '') {
   row.id = `piece_${id}`;
   row.innerHTML = `
     <select class="piece-dia">
-       <option value="6.3" ${dia=='6.3'?'selected':''}>6.3 mm</option>
-       <option value="10" ${dia=='10'?'selected':''}>10.0 mm</option>
-       <option value="12.5" ${dia=='12.5'?'selected':''}>12.5 mm</option>
+       <option value="6.3" ${dia == '6.3' ? 'selected' : ''}>6.3 mm</option>
+       <option value="10" ${dia == '10' ? 'selected' : ''}>10.0 mm</option>
+       <option value="12.5" ${dia == '12.5' ? 'selected' : ''}>12.5 mm</option>
     </select>
     <input type="number" placeholder="ex: 250" min="1" step="0.1" value="${len}" class="piece-len">
     <input type="number" placeholder="ex: 3" min="1" step="1" value="${qty}" class="piece-qty">
@@ -118,14 +118,19 @@ function solve(pieces, beamLen, patterns) {
       }
       if (!useful) continue;
 
+      // FIX 1: score conta apenas produção dentro da demanda
       let score = 0;
-      let lenUsed = 0;
       for (let i = 0; i < n; i++) {
         const used = Math.min(pat[i], demand[i]);
         score += used * pieces[i].len;
-        lenUsed += pat[i] * pieces[i].len;
       }
-      score += (lenUsed / beamLen) * 0.5;
+      score += (score / beamLen) * 0.5;
+
+      // FIX 2: penalidade por cada peça produzida além da demanda
+      for (let i = 0; i < n; i++) {
+        const excess = Math.max(0, pat[i] - demand[i]);
+        score -= excess * pieces[i].len * 0.8;
+      }
 
       if (score > bestScore) {
         bestScore = score;
@@ -135,10 +140,11 @@ function solve(pieces, beamLen, patterns) {
 
     if (!bestPattern) break;
 
+    // FIX 3: floor em vez de ceil — não ultrapassa a demanda por nenhuma peça
     let times = Infinity;
     for (let i = 0; i < n; i++) {
       if (bestPattern[i] > 0 && demand[i] > 0) {
-        times = Math.min(times, Math.ceil(demand[i] / bestPattern[i]));
+        times = Math.min(times, Math.floor(demand[i] / bestPattern[i]));
       }
     }
     times = Math.max(1, times === Infinity ? 1 : times);
@@ -154,7 +160,6 @@ function solve(pieces, beamLen, patterns) {
 
   return usedPatterns;
 }
-
 // Compute waste for a pattern
 function patternWaste(pattern, pieces, beamLen) {
   let used = 0;
@@ -206,7 +211,7 @@ function calculate() {
   }
 
   // Obter lista única de diâmetros (do menor pro maior)
-  const diameters = [...new Set(allPieces.map(p => p.dia))].sort((a,b) => parseFloat(a) - parseFloat(b));
+  const diameters = [...new Set(allPieces.map(p => p.dia))].sort((a, b) => parseFloat(a) - parseFloat(b));
 
   let totalBeams = 0;
   let totalMaterial = 0; // em cm
@@ -219,11 +224,11 @@ function calculate() {
             <div class="math-block">Σ (quantidade_i × comprimento_i) ≤ ${beamLen}cm</div>`;
   let s3 = `<p>O problema é formulado como <strong>Otimização Combinatória</strong>, resolvido via heurística gulosa independentemente para cada bitola de aço (diâmetro).</p>`;
   let s4 = ``;
-  
+
   let globalPieceIdx = 0;
   let printCutCounter = 0;
   const MAX_CUTS_PER_PAGE = 5; // Limite de blocos de corte por página impressa
-  
+
   let summaryByType = [];
   let totalCutsCount = 0;
 
@@ -284,7 +289,7 @@ function calculate() {
       ...patterns.filter(p => usedKeys.has(p.join(','))),
       ...patterns.filter(p => !usedKeys.has(p.join(','))).slice(0, 6)
     ].slice(0, 12); // Exibe até 12 padrões no máximo por diâmetro para não poluir
-    
+
     displayPats.forEach((pat, idx) => {
       const waste = patternWaste(pat, pieces, beamLen);
       const used = usedKeys.has(pat.join(','));
@@ -311,7 +316,7 @@ function calculate() {
             s4 += `<div class="page-break"></div>`;
           }
           printCutCounter++;
-          
+
           const waste = patternWaste(u.pattern, pieces, beamLen);
           s4 += `<div class="cut-beam">`;
           s4 += `<div class="cut-beam-title">BARRA ${beamNum++} <span>de ${beamLen}cm (Ø${dia}mm)</span></div>`;
@@ -367,12 +372,12 @@ function calculate() {
   document.getElementById('step1').innerHTML = s1;
   document.getElementById('step2').innerHTML = s2;
   document.getElementById('step3').innerHTML = s3;
-  
+
   let printCover = `
     <div class="print-cover" style="margin-bottom: 30px;">
       <h3 style="color:var(--accent); border-bottom: 2px solid var(--border); padding-bottom: 15px; font-size: 22px;">RESUMO E SEPARAÇÃO DE MATERIAIS</h3>
       <div style="font-family: var(--mono); font-size: 18px; line-height: 2; margin-top: 20px; color: #000;">
-        <p style="font-size: 24px; font-weight: bold;"><strong>Total de Vigas Necessárias:</strong> ${totalBeams} vigas de ${beamLen/100}m</p>
+        <p style="font-size: 24px; font-weight: bold;"><strong>Total de Vigas Necessárias:</strong> ${totalBeams} vigas de ${beamLen / 100}m</p>
         <p style="font-size: 20px;"><strong>Total de Cortes Físicos a Realizar:</strong> ${totalCutsCount} cortes</p>
         <div style="margin-top:20px; padding: 15px; background: rgba(0,0,0,0.1) !important; border-left: 4px solid #000;">
           <strong style="font-size: 20px;">Detalhamento por Diâmetro:</strong>
@@ -383,7 +388,7 @@ function calculate() {
       </div>
     </div>
   `;
-  
+
   document.getElementById('step4').innerHTML = printCover + s4;
 
   document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
