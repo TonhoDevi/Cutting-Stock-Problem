@@ -160,6 +160,83 @@ function solve(pieces, beamLen, patterns) {
 
   return usedPatterns;
 }
+
+// Busca exata (branch and bound) sobre os padrões já gerados.
+// A heurística gulosa de `solve` escolhe a cada passo o padrão que mais
+// aproveita a barra atual, mas isso pode ser míope: usar peças que só
+// combinam com outras (ex: 350cm+652cm) de forma "pura" primeiro deixa as
+// peças restantes sem parceiro, gerando mais barras do que o necessário.
+// Aqui exploramos combinações de padrões com poda por limite inferior
+// (comprimento restante / comprimento da barra), sempre partindo da
+// solução gulosa como teto inicial — nunca piora o resultado, e se o
+// espaço de busca for grande demais, simplesmente devolve a gulosa.
+function solveOptimal(pieces, beamLen, patterns) {
+  const greedy = solve(pieces, beamLen, patterns);
+  const n = pieces.length;
+  const totalDemand = pieces.reduce((s, p) => s + p.qty, 0);
+
+  const MAX_DEMAND_FOR_EXACT = 40;
+  const NODE_LIMIT = 40000;
+  if (totalDemand === 0 || totalDemand > MAX_DEMAND_FOR_EXACT || patterns.length === 0) {
+    return greedy;
+  }
+
+  let bestCount = greedy.reduce((s, u) => s + u.count, 0);
+  let bestBeams = greedy.flatMap(u => Array(u.count).fill(u.pattern));
+  let nodes = 0;
+
+  // Tenta primeiro os padrões que mais aproveitam a barra: encontra boas
+  // soluções cedo, o que fortalece a poda.
+  const sortedPatterns = [...patterns].sort((a, b) => {
+    const usedA = a.reduce((s, q, i) => s + q * pieces[i].len, 0);
+    const usedB = b.reduce((s, q, i) => s + q * pieces[i].len, 0);
+    return usedB - usedA;
+  });
+
+  function lowerBound(demand) {
+    let len = 0;
+    for (let i = 0; i < n; i++) len += demand[i] * pieces[i].len;
+    return Math.ceil(len / beamLen);
+  }
+
+  function search(demand, count, beams) {
+    nodes++;
+    if (nodes > NODE_LIMIT) return;
+    if (demand.every(d => d <= 0)) {
+      if (count < bestCount) {
+        bestCount = count;
+        bestBeams = beams.slice();
+      }
+      return;
+    }
+    if (count + lowerBound(demand) >= bestCount) return; // poda: não pode melhorar
+
+    for (const pat of sortedPatterns) {
+      let useful = false;
+      for (let i = 0; i < n; i++) {
+        if (pat[i] > 0 && demand[i] > 0) { useful = true; break; }
+      }
+      if (!useful) continue;
+
+      const next = demand.map((d, i) => Math.max(0, d - pat[i]));
+      beams.push(pat);
+      search(next, count + 1, beams);
+      beams.pop();
+      if (nodes > NODE_LIMIT) return;
+    }
+  }
+
+  search(pieces.map(p => p.qty), 0, []);
+
+  const grouped = [];
+  bestBeams.forEach(pat => {
+    const existing = grouped.find(g => g.pattern.join(',') === pat.join(','));
+    if (existing) existing.count++;
+    else grouped.push({ pattern: pat, count: 1 });
+  });
+  return grouped;
+}
+
 // Compute waste for a pattern
 function patternWaste(pattern, pieces, beamLen) {
   let used = 0;
@@ -245,7 +322,7 @@ function calculate() {
 
     // Resolver agrupamento
     const patterns = generatePatterns(pieces, beamLen);
-    const solution = solve(pieces, beamLen, patterns);
+    const solution = solveOptimal(pieces, beamLen, patterns);
 
     const dBeams = solution.reduce((s, u) => s + u.count, 0);
     const dMaterial = dBeams * beamLen;
